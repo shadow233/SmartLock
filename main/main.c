@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-21 15:34:18
+ * @LastEditTime: 2023-12-21 16:22:57
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
@@ -12,13 +12,13 @@
 #include "freertos/task.h"
 #include "MG90S.h"
 
-#define VERSION "0.1.1"
+#define VERSION "0.1.2"
 
-static TaskHandle_t LED_Task_Handle = NULL;   /* LED 任务句柄 */
-static TaskHandle_t MG90S_Task_Handle = NULL; /* MG90S 任务句柄 */
+static TaskHandle_t MG90S_Task_Handle = NULL;   /* MG90S 任务句柄 */
+static TaskHandle_t FPM383C_Task_Handle = NULL; /* FPM383C 任务句柄 */
 
-static void LED_Task(void *pvParameters);   /* LED_Task 任务实现 */
-static void MG90S_Task(void *pvParameters); /* MG90S_Task 任务实现 */
+static void MG90S_Task(void *pvParameters);   /* MG90S_Task 任务实现 */
+static void FPM383C_Task(void *pvParameters); /* FPM383C_Task 任务实现 */
 
 void app_main(void)
 {
@@ -30,26 +30,16 @@ void app_main(void)
     printf("\r\n-----SMARTLOCK START %s-----\r\n", VERSION);
     printf("\r\n================================\r\n");
 
-    /* 创建 LED_Task 任务 */
-    xReturn = xTaskCreate((TaskFunction_t)LED_Task,          /* 任务入口函数 */
-                          (const char *)"LED_Task",          /* 任务名字 */
-                          (uint16_t)512,                     /* 任务栈大小 */
-                          (void *)NULL,                      /* 任务入口函数参数 */
-                          (UBaseType_t)2,                    /* 任务的优先级 */
-                          (TaskHandle_t *)&LED_Task_Handle); /* 任务控制块指针 */
-    if (pdPASS == xReturn)
-        printf("创建 LED_Task 任务成功!\r\n");
-    else
-        return;
     /* 创建 MG90S_Task 任务 */
-    xReturn = xTaskCreate((TaskFunction_t)MG90S_Task,          /* 任务入口函数 */
-                          (const char *)"MG90S_Task",          /* 任务名字 */
-                          (uint16_t)512,                       /* 任务栈大小 */
-                          (void *)NULL,                        /* 任务入口函数参数 */
-                          (UBaseType_t)3,                      /* 任务的优先级 */
-                          (TaskHandle_t *)&MG90S_Task_Handle); /* 任务控制块指针 */
+    xReturn = xTaskCreate((TaskFunction_t)MG90S_Task, (const char *)"MG90S_Task", (uint16_t)512, (void *)NULL, (UBaseType_t)3, (TaskHandle_t *)&MG90S_Task_Handle);
     if (pdPASS == xReturn)
         printf("创建 MG90S_Task 任务成功!\r\n");
+    else
+        return;
+    /* 创建 FPM383C_Task 任务 */
+    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task, (const char *)"FPM383C_Task", (uint16_t)512, (void *)NULL, (UBaseType_t)2, (TaskHandle_t *)&FPM383C_Task_Handle);
+    if (pdPASS == xReturn)
+        printf("创建 FPM383C_Task 任务成功!\r\n");
     else
         return;
 
@@ -57,21 +47,22 @@ void app_main(void)
     // vTaskStartScheduler();
 }
 
-void LED_Task(void *pvParameters)
-{
-    while (1)
-    {
-        printf("LED TASK\r\n");
-        LED1_TOGGLE();
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
 void MG90S_Task(void *pvParameters)
 {
     while (1)
     {
         printf("MG90S TASK\r\n");
-        MG90S_360_Forward();
+        // MG90S_360_Forward();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+void FPM383C_Task(void *pvParameters)
+{
+    while (1)
+    {
+        printf("FPM383C TASK\r\n");
+        LED1_TOGGLE();
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
