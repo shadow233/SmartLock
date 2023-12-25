@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-21 15:52:54
+ * @LastEditTime: 2023-12-25 10:10:31
  * @FilePath: \SmartLock\components\FPM383C\include\FPM383C.h
  * @Description:
  */
@@ -12,15 +12,16 @@
 
 #include "driver/uart.h"
 
-// typedef struct
-// {
-//     char *tag;
-//     QueueHandle_t queue;
+typedef struct
+{
+    char *tag;
+    QueueHandle_t queue;
+    TaskHandle_t FPM383C_Task_Handle;
+    TaskHandle_t FPM383C_Recv_Task_Handle;
+} FPM383C_TypeDef, *PFPM383C_TypeDef;
 
-// } FPM383C_TypeDef, *PFPM383C_TypeDef;
-
-void FPM383C_Init(void);
-void FPM383C_Send_Bytes(uint8_t *buf, uint16_t len);
+void FPM383C_Init(PFPM383C_TypeDef p);
+void FPM383C_Task(void *pvParameters);
 void FPM383C_Recv_Task(void *pvParameters);
 
 #endif
