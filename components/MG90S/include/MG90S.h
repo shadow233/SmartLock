@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 09:29:04
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-21 11:11:28
+ * @LastEditTime: 2023-12-25 11:52:33
  * @FilePath: \SmartLock\components\MG90S\include\MG90S.h
  * @Description:
  */
@@ -10,16 +10,21 @@
 #define __MG90S_H
 
 #include "driver/ledc.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
 
-#define MG90S_360_EN
-// #define MG90S_180_EN
+#define DEGREE_0_EVENT (0x01 << 0)   // 设置事件掩码的位 0
+#define DEGREE_90_EVENT (0x01 << 1)  // 设置事件掩码的位 1
+#define DEGREE_180_EVENT (0x01 << 2) // 设置事件掩码的位 2
 
-void MG90S_Init(void);
-#ifdef MG90S_360_EN
-void MG90S_360_Forward(void);
-#endif
-#ifdef MG90S_180_EN
-void MG90S_180_Angle(void);
-#endif
+typedef struct
+{
+    char *tag;
+    TaskHandle_t taskHandle;
+    EventGroupHandle_t eventHandle;
+} MG90S_TypeDef, *PMG90S_TypeDef;
+
+void MG90S_Task(void *pvParameters);
 
 #endif

@@ -15,9 +15,10 @@
 typedef struct
 {
     char *tag;
+    char *rTag;
     QueueHandle_t queue;
-    TaskHandle_t FPM383C_Task_Handle;
-    TaskHandle_t FPM383C_Recv_Task_Handle;
+    TaskHandle_t taskHandle;
+    TaskHandle_t rTaskHandle;
 } FPM383C_TypeDef, *PFPM383C_TypeDef;
 
 void FPM383C_Init(PFPM383C_TypeDef p);

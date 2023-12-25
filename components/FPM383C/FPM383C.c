@@ -38,8 +38,9 @@ void FPM383C_Init(PFPM383C_TypeDef p)
 
 void FPM383C_Task(void *pvParameters)
 {
-    static const char *FPM383C_TASK_TAG = "FPM383C_Task";
-    esp_log_level_set(FPM383C_TASK_TAG, ESP_LOG_INFO);
+    PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
+    p->tag = "FPM383C_Task";
+    esp_log_level_set(p->tag, ESP_LOG_INFO);
     // uint8_t buf[] = "hello world\r\n";
     while (1)
     {
@@ -57,8 +58,8 @@ void FPM383C_Task(void *pvParameters)
 void FPM383C_Recv_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
-    p->tag = "FPM383C_Recv_Task";
-    esp_log_level_set(p->tag, ESP_LOG_INFO);
+    p->rTag = "FPM383C_Recv_Task";
+    esp_log_level_set(p->rTag, ESP_LOG_INFO);
     uart_event_t event;
     uint8_t *dtmp = (uint8_t *)malloc(RD_BUF_SIZE); // 动态申请内存
     for (;;)
@@ -71,35 +72,35 @@ void FPM383C_Recv_Task(void *pvParameters)
             {
             case UART_DATA:                                                    // UART接收数据的事件
                 uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY); // 获取数据
-                ESP_LOGI(p->tag, "rx: %d", event.size);
+                ESP_LOGI(p->rTag, "rx: %d", event.size);
                 for (int i = 0; i < event.size; i++)
-                    ESP_LOGI(p->tag, "%02X ", dtmp[i]);
+                    ESP_LOGI(p->rTag, "%02X ", dtmp[i]);
                 uart_write_bytes(EX_UART_NUM, (const char *)dtmp, event.size); // 发送数据
                 break;
             case UART_FIFO_OVF: // 检测到硬件 FIFO 溢出事件
-                ESP_LOGI(p->tag, "hw fifo overflow");
+                ESP_LOGI(p->rTag, "hw fifo overflow");
                 // 如果fifo溢出发生，你应该考虑为你的应用程序添加流量控制。
                 // ISR已经重置了rx FIFO，例如，我们直接刷新rx缓冲区来读取更多的数据。
                 uart_flush_input(EX_UART_NUM); // 清除输入缓冲区，丢弃所有环缓冲区中的数据
                 xQueueReset(p->queue);         // 重置一个队列到它原来的空状态。返回值是现在过时，并且总是设置为pdPASS。
                 break;
             case UART_BUFFER_FULL: // UART RX 缓冲器满事件
-                ESP_LOGI(p->tag, "ring buffer full");
+                ESP_LOGI(p->rTag, "ring buffer full");
                 // 如果缓冲区满了，你应该考虑增加你的缓冲区大小
                 // 举个例子，我们这里直接刷新 rx 缓冲区，以便读取更多数据。uart_flush_input(EX_UART_NUM);
                 xQueueReset(p->queue); // 重置一个队列到它原来的空状态
                 break;
             case UART_BREAK: // UART 中断事件
-                ESP_LOGI(p->tag, "uart rx break");
+                ESP_LOGI(p->rTag, "uart rx break");
                 break;
             case UART_PARITY_ERR: // UART奇偶校验错误事件
-                ESP_LOGI(p->tag, "uart parity error");
+                ESP_LOGI(p->rTag, "uart parity error");
                 break;
             case UART_FRAME_ERR: // UART 帧错误事件
-                ESP_LOGI(p->tag, "uart frame error");
+                ESP_LOGI(p->rTag, "uart frame error");
                 break;
             default: // 其他
-                ESP_LOGI(p->tag, "uart event type: %d", event.type);
+                ESP_LOGI(p->rTag, "uart event type: %d", event.type);
                 break;
             }
         }

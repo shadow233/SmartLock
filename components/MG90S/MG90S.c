@@ -2,6 +2,10 @@
 #include "MG90S.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
+
+// #define MG90S_360_EN
+#define MG90S_180_EN
 
 #define LEDC_TIMER LEDC_TIMER_0
 #define LEDC_MODE LEDC_LOW_SPEED_MODE
@@ -108,22 +112,68 @@ void MG90S_360_Forward(void)
  */
 
 // 0-180度舵机 --> 0-90-180度控制函数
-void MG90S_180_Angle(void)
+void MG90S_180_Angle(uint32_t degree)
 {
-    /* 0度 */
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_0));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    switch (degree)
+    {
+    case MG90S_180_DUTY_DEGREE_0:
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_0));
+        break;
+    case MG90S_180_DUTY_DEGREE_90:
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_90));
+        break;
+    case MG90S_180_DUTY_DEGREE_180:
+        ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_180));
+        break;
 
-    /* 90度 */
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_90));
-    ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    default:
+        break;
+    }
 
-    /* 180度 */
-    ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_180));
     ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
-    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // /* 0度 */
+    // ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_0));
+    // ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // /* 90度 */
+    // ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_90));
+    // ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // /* 180度 */
+    // ESP_ERROR_CHECK(ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, MG90S_180_DUTY_DEGREE_180));
+    // ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
+    // vTaskDelay(pdMS_TO_TICKS(1000));
 }
 /*****************************************END****************************************/
 #endif
+
+void MG90S_Task(void *pvParameters)
+{
+    PMG90S_TypeDef p = (PMG90S_TypeDef)pvParameters;
+    p->tag = "MG90S_Task";
+    esp_log_level_set(p->tag, ESP_LOG_INFO);
+    EventBits_t r_event;
+    while (1)
+    {
+        r_event = xEventGroupWaitBits(p->eventHandle, DEGREE_0_EVENT | DEGREE_90_EVENT | DEGREE_180_EVENT, pdTRUE, pdFALSE, portMAX_DELAY);
+        if ((r_event & DEGREE_0_EVENT) == DEGREE_0_EVENT)
+        {
+            MG90S_180_Angle(MG90S_180_DUTY_DEGREE_0);
+        }
+        else if ((r_event & DEGREE_90_EVENT) == DEGREE_90_EVENT)
+        {
+            MG90S_180_Angle(MG90S_180_DUTY_DEGREE_90);
+        }
+        else if ((r_event & DEGREE_180_EVENT) == DEGREE_180_EVENT)
+        {
+            MG90S_180_Angle(MG90S_180_DUTY_DEGREE_180);
+        }
+        else
+        {
+            ESP_LOGI(p->tag, "MG90S Event Error");
+        }
+    }
+}

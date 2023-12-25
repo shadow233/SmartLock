@@ -2,27 +2,28 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-25 10:15:44
+ * @LastEditTime: 2023-12-25 13:37:42
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.1.4"
+#define VERSION "V0.1.5"
 
-PRunParam pRunParam = NULL;
+PRunParam_t pRunParam = NULL;
 
-static TaskHandle_t MG90S_Task_Handle = NULL; /* MG90S 任务句柄 */
+static TaskHandle_t MAIN_Task_Handle = NULL;
 
-static void MG90S_Task(void *pvParameters); /* MG90S_Task 任务实现 */
+static void MAIN_Task(void *pvParameters);
 
 void app_main(void)
 {
     BaseType_t xReturn = pdPASS; /* 定义一个创建信息返回值，默认为 pdPASS */
 
-    pRunParam = malloc(sizeof(RunParam));
+    pRunParam = malloc(sizeof(RunParam_t));
     pRunParam->tag = "app_main";
+    pRunParam->pMG90S = malloc(sizeof(MG90S_TypeDef));
     pRunParam->pFPM383C = malloc(sizeof(FPM383C_TypeDef));
 
     esp_log_level_set(pRunParam->tag, ESP_LOG_INFO);
@@ -32,22 +33,49 @@ void app_main(void)
 
     ESP_LOGI(pRunParam->tag, "SMARTLOCK START %s", VERSION);
 
-    /* 创建 MG90S_Task 任务 */
-    xReturn = xTaskCreate((TaskFunction_t)MG90S_Task, (const char *)"MG90S_Task", (uint16_t)2048, (void *)NULL, (UBaseType_t)2, (TaskHandle_t *)&MG90S_Task_Handle);
+    /* Create Event */
+    pRunParam->pMG90S->eventHandle = xEventGroupCreate();
+    if (NULL != pRunParam->pMG90S->eventHandle)
+        ESP_LOGI(pRunParam->tag, "Create MG90S_Event Success!");
+
+    /* Create Task */
+    xReturn = xTaskCreate((TaskFunction_t)MAIN_Task,
+                          (const char *)"MAIN_Task",
+                          (uint16_t)2048,
+                          (void *)(pRunParam),
+                          (UBaseType_t)2,
+                          (TaskHandle_t *)&(MAIN_Task_Handle));
     if (pdPASS == xReturn)
-        ESP_LOGI(pRunParam->tag, "创建 MG90S_Task 任务成功!");
+        ESP_LOGI(pRunParam->tag, "Create MG90S_Task Success!");
     else
         return;
-    /* 创建 FPM383C_Task 任务 */
-    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task, (const char *)"FPM383C_Task", (uint16_t)2048, (void *)NULL, (UBaseType_t)3, (TaskHandle_t *)&(pRunParam->pFPM383C->FPM383C_Task_Handle));
+    xReturn = xTaskCreate((TaskFunction_t)MG90S_Task,
+                          (const char *)"MG90S_Task",
+                          (uint16_t)2048,
+                          (void *)(pRunParam->pMG90S),
+                          (UBaseType_t)3,
+                          (TaskHandle_t *)&(pRunParam->pMG90S->taskHandle));
     if (pdPASS == xReturn)
-        ESP_LOGI(pRunParam->tag, "创建 FPM383C_Task 任务成功!");
+        ESP_LOGI(pRunParam->tag, "Create MG90S_Task Success!");
     else
         return;
-    /* 创建 FPM383C_Recv_Task 任务 */
-    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Recv_Task, (const char *)"FPM383C_Recv_Task", (uint16_t)2048, (void *)(pRunParam->pFPM383C), (UBaseType_t)4, (TaskHandle_t *)&(pRunParam->pFPM383C->FPM383C_Recv_Task_Handle));
+    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task,
+                          (const char *)"FPM383C_Task",
+                          (uint16_t)2048, (void *)NULL,
+                          (UBaseType_t)4,
+                          (TaskHandle_t *)&(pRunParam->pFPM383C->taskHandle));
     if (pdPASS == xReturn)
-        ESP_LOGI(pRunParam->tag, "创建 FPM383C_Recv_Task 任务成功!");
+        ESP_LOGI(pRunParam->tag, "Create FPM383C_Task Success!");
+    else
+        return;
+    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Recv_Task,
+                          (const char *)"FPM383C_Recv_Task",
+                          (uint16_t)2048,
+                          (void *)(pRunParam->pFPM383C),
+                          (UBaseType_t)5,
+                          (TaskHandle_t *)&(pRunParam->pFPM383C->rTaskHandle));
+    if (pdPASS == xReturn)
+        ESP_LOGI(pRunParam->tag, "Create FPM383C_Recv_Task Success!");
     else
         return;
 
@@ -55,15 +83,16 @@ void app_main(void)
     // vTaskStartScheduler();
 }
 
-void MG90S_Task(void *pvParameters)
+void MAIN_Task(void *pvParameters)
 {
-    static const char *MG90S_TASK_TAG = "MG90S_Task";
-    esp_log_level_set(MG90S_TASK_TAG, ESP_LOG_INFO);
+    // PRunParam_t p = (PRunParam_t)pvParameters;
     while (1)
     {
-        // ESP_LOGI(MG90S_TASK_TAG, "MG90S TASK");
-        // MG90S_360_Forward();
-        LED1_TOGGLE();
+        // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_0_EVENT);
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_90_EVENT);
+        // vTaskDelay(pdMS_TO_TICKS(1000));
+        // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_180_EVENT);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
