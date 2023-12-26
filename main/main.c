@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-26 16:03:07
+ * @LastEditTime: 2023-12-26 17:50:52
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.1.6"
+#define VERSION "V0.1.7"
 
 PRunParam_t pRunParam = NULL;
 
@@ -70,7 +70,7 @@ void app_main(void)
         return;
     xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task,
                           (const char *)"FPM383C_Task",
-                          (uint16_t)2048,
+                          (uint16_t)4096,
                           (void *)(pRunParam->pFPM383C),
                           (UBaseType_t)4,
                           (TaskHandle_t *)&(pRunParam->pFPM383C->taskHandle));

@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-26 15:42:05
+ * @LastEditTime: 2023-12-26 17:35:45
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -20,6 +20,8 @@
 
 #define BUF_SIZE (256)         // buf大小
 #define RD_BUF_SIZE (BUF_SIZE) // 读取字符大小
+
+#define TOUCH_OUT_PIN (GPIO_NUM_3)
 
 typedef enum
 {
@@ -58,6 +60,18 @@ uint8_t deepSleep[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0
 /* 指纹特征清除（同步） */
 uint8_t delete[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0A, 0x83, 0x00, 0x00, 0x00, 0x00, 0x01, 0x36, 0x00, 0x00, 0x04, 0xC5};
 
+static void IRAM_ATTR TOUCH_OUT_IRQHandler(void *arg)
+{
+    printf("isr_handler\r\n");
+
+    uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+
+    // remove isr handler for gpio number.
+    gpio_isr_handler_remove(TOUCH_OUT_PIN);
+
+    portYIELD_FROM_ISR();
+}
+
 void FPM383C_Init(PFPM383C_TypeDef p)
 {
     const uart_config_t uart_config = {
@@ -72,6 +86,27 @@ void FPM383C_Init(PFPM383C_TypeDef p)
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &(p->uart_queue), 0);
     uart_param_config(EX_UART_NUM, &uart_config);
     uart_set_pin(EX_UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+
+    const gpio_config_t io_conf = {
+        .pin_bit_mask = 1 << TOUCH_OUT_PIN,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_POSEDGE,
+    };
+    gpio_config(&io_conf);
+
+    // change gpio interrupt type for one pin
+    gpio_set_intr_type(TOUCH_OUT_PIN, GPIO_INTR_POSEDGE);
+
+    // install gpio isr service
+    gpio_install_isr_service(0);
+
+    // hook isr handler for specific gpio pin
+    gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)NULL);
+
+    // remove isr handler for gpio number.
+    gpio_isr_handler_remove(TOUCH_OUT_PIN);
 }
 
 /**
@@ -107,7 +142,6 @@ void FPM383C_Task(void *pvParameters)
     // uart_write_bytes(EX_UART_NUM, match, sizeof(match));
     // uart_write_bytes(EX_UART_NUM, heartBeat, sizeof(heartBeat));
 
-    // uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
     // vTaskDelay(pdMS_TO_TICKS(2000));
     // uart_write_bytes(EX_UART_NUM, led_red, sizeof(led_red));
     // vTaskDelay(pdMS_TO_TICKS(2000));
@@ -115,7 +149,8 @@ void FPM383C_Task(void *pvParameters)
     // vTaskDelay(pdMS_TO_TICKS(1000));
 
     // uart_write_bytes(EX_UART_NUM, led_close, sizeof(led_close));
-
+    uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
+    vTaskDelay(pdMS_TO_TICKS(200));
     uart_write_bytes(EX_UART_NUM, match, sizeof(match));
 
     BaseType_t xReturn = pdTRUE;
@@ -132,16 +167,30 @@ void FPM383C_Task(void *pvParameters)
                 if (r_queue[1] == FPM383C_OK)
                 {
                     ESP_LOGI(p->tag, "id:%d", r_queue[2] << 8 | r_queue[3]);
+                    uart_write_bytes(EX_UART_NUM, led_green, sizeof(led_green));
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
+                    vTaskDelay(pdMS_TO_TICKS(200));
                 }
                 else if (r_queue[1] == FPM383C_TIMEOUT)
                 {
                     count++;
-                    if (count == 5)
+                    if (count == 3)
                     {
+                        uart_write_bytes(EX_UART_NUM, led_close, sizeof(led_close));
+                        vTaskDelay(pdMS_TO_TICKS(200));
+                        gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)NULL);
                         uart_write_bytes(EX_UART_NUM, normalSleep, sizeof(normalSleep));
-                        ESP_LOGI(p->tag, "enter Normal Sleep");
+                        vTaskDelay(pdMS_TO_TICKS(200));
                         count = 0;
                     }
+                }
+                else
+                {
+                    uart_write_bytes(EX_UART_NUM, led_red, sizeof(led_red));
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
+                    vTaskDelay(pdMS_TO_TICKS(200));
                 }
                 uart_write_bytes(EX_UART_NUM, match, sizeof(match));
                 break;
@@ -262,6 +311,19 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
         if (error == 0)
         {
             ESP_LOGI(p->rTag, "[LED] change");
+        }
+        break;
+    case 0x020C: // LED
+        if (error == 0)
+        {
+            if (data[17] == 0)
+            {
+                ESP_LOGI(p->rTag, "[Sleep] Enter Normal Sleep");
+            }
+            else
+            {
+                ESP_LOGI(p->rTag, "[Sleep] Enter Deep Sleep");
+            }
         }
         break;
     default:
