@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-25 10:10:31
+ * @LastEditTime: 2023-12-26 09:44:18
  * @FilePath: \SmartLock\components\FPM383C\include\FPM383C.h
  * @Description:
  */
@@ -16,6 +16,9 @@ typedef struct
 {
     char *tag;
     char *rTag;
+    char id[16];
+    int password;
+    QueueHandle_t uart_queue;
     QueueHandle_t queue;
     TaskHandle_t taskHandle;
     TaskHandle_t rTaskHandle;

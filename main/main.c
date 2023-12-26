@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-25 13:37:42
+ * @LastEditTime: 2023-12-26 16:03:07
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.1.5"
+#define VERSION "V0.1.6"
 
 PRunParam_t pRunParam = NULL;
 
@@ -25,17 +25,26 @@ void app_main(void)
     pRunParam->tag = "app_main";
     pRunParam->pMG90S = malloc(sizeof(MG90S_TypeDef));
     pRunParam->pFPM383C = malloc(sizeof(FPM383C_TypeDef));
+    bzero(pRunParam->pMG90S, sizeof(MG90S_TypeDef));
+    bzero(pRunParam->pFPM383C, sizeof(FPM383C_TypeDef));
 
     esp_log_level_set(pRunParam->tag, ESP_LOG_INFO);
     led_init();
     MG90S_Init();
     FPM383C_Init(pRunParam->pFPM383C);
 
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     ESP_LOGI(pRunParam->tag, "SMARTLOCK START %s", VERSION);
+
+    /* 创建 Test_Queue */
+    pRunParam->pFPM383C->queue = xQueueCreate(4, 20);
+    if (pRunParam->pFPM383C->queue != NULL)
+        ESP_LOGI(pRunParam->tag, "Create FPM383C_Queue Success!");
 
     /* Create Event */
     pRunParam->pMG90S->eventHandle = xEventGroupCreate();
-    if (NULL != pRunParam->pMG90S->eventHandle)
+    if (pRunParam->pMG90S->eventHandle != NULL)
         ESP_LOGI(pRunParam->tag, "Create MG90S_Event Success!");
 
     /* Create Task */
@@ -46,7 +55,7 @@ void app_main(void)
                           (UBaseType_t)2,
                           (TaskHandle_t *)&(MAIN_Task_Handle));
     if (pdPASS == xReturn)
-        ESP_LOGI(pRunParam->tag, "Create MG90S_Task Success!");
+        ESP_LOGI(pRunParam->tag, "Create MAIN_Task Success!");
     else
         return;
     xReturn = xTaskCreate((TaskFunction_t)MG90S_Task,
@@ -61,7 +70,8 @@ void app_main(void)
         return;
     xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task,
                           (const char *)"FPM383C_Task",
-                          (uint16_t)2048, (void *)NULL,
+                          (uint16_t)2048,
+                          (void *)(pRunParam->pFPM383C),
                           (UBaseType_t)4,
                           (TaskHandle_t *)&(pRunParam->pFPM383C->taskHandle));
     if (pdPASS == xReturn)
@@ -70,7 +80,7 @@ void app_main(void)
         return;
     xReturn = xTaskCreate((TaskFunction_t)FPM383C_Recv_Task,
                           (const char *)"FPM383C_Recv_Task",
-                          (uint16_t)2048,
+                          (uint16_t)4096,
                           (void *)(pRunParam->pFPM383C),
                           (UBaseType_t)5,
                           (TaskHandle_t *)&(pRunParam->pFPM383C->rTaskHandle));
@@ -86,6 +96,8 @@ void app_main(void)
 void MAIN_Task(void *pvParameters)
 {
     // PRunParam_t p = (PRunParam_t)pvParameters;
+    // const char *tag = "main";
+    // esp_log_level_set(tag, ESP_LOG_INFO);
     while (1)
     {
         // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_0_EVENT);
@@ -93,6 +105,8 @@ void MAIN_Task(void *pvParameters)
         // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_90_EVENT);
         // vTaskDelay(pdMS_TO_TICKS(1000));
         // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_180_EVENT);
+        // ESP_LOGI(tag, "hello world");
         vTaskDelay(pdMS_TO_TICKS(1000));
+        // vTaskDelay(1000 / portTICK_RATE_MS);
     }
 }

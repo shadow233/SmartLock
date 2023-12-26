@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-25 10:04:21
+ * @LastEditTime: 2023-12-26 15:42:05
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -11,6 +11,7 @@
 #include "FPM383C.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+// #include "led.h"
 
 #define TXD_PIN (GPIO_NUM_0)
 #define RXD_PIN (GPIO_NUM_1)
@@ -19,6 +20,43 @@
 
 #define BUF_SIZE (256)         // buf大小
 #define RD_BUF_SIZE (BUF_SIZE) // 读取字符大小
+
+typedef enum
+{
+    MATCH = 0,
+    AUTOLOGON,
+    DELETE
+} FPM383C_Event_Typedef;
+
+typedef enum
+{
+    FPM383C_OK = 0,
+    FPM383C_ERROR,
+    FPM383C_TIMEOUT
+} FPM383C_State_Typedef;
+
+/* 直接使用 */
+/* 心跳 */
+uint8_t heartBeat[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
+/* 获取模块ID */
+uint8_t getModuleID[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x01, 0xFC};
+/* 自动注册 */
+uint8_t autoLogon[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0B, 0x82, 0x00, 0x00, 0x00, 0x00, 0x01, 0x18, 0x01, 0x06, 0xFF, 0xFF, 0xE2};
+/* 指纹匹配（同步） */
+uint8_t match[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x01, 0x23, 0xDC};
+/* LED 关闭 */
+uint8_t led_close[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0C, 0x81, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0xEF};
+/* LED 开启*/
+uint8_t led_red[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0C, 0x81, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0F, 0x01, 0x02, 0x00, 0x00, 0x00, 0xEC};
+uint8_t led_green[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0C, 0x81, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0F, 0x01, 0x01, 0x00, 0x00, 0x00, 0xED};
+uint8_t led_blue[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0C, 0x81, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0F, 0x01, 0x04, 0x00, 0x00, 0x00, 0xEA};
+/* 休眠 */
+uint8_t normalSleep[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x08, 0x85, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0C, 0x00, 0xF2};
+uint8_t deepSleep[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x08, 0x85, 0x00, 0x00, 0x00, 0x00, 0x02, 0x0C, 0x01, 0xF1};
+
+/* 需要修改 */
+/* 指纹特征清除（同步） */
+uint8_t delete[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0A, 0x83, 0x00, 0x00, 0x00, 0x00, 0x01, 0x36, 0x00, 0x00, 0x04, 0xC5};
 
 void FPM383C_Init(PFPM383C_TypeDef p)
 {
@@ -31,9 +69,28 @@ void FPM383C_Init(PFPM383C_TypeDef p)
         .source_clk = UART_SCLK_DEFAULT,
     };
     // We won't use a buffer for sending data.
-    uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &(p->queue), 0);
+    uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &(p->uart_queue), 0);
     uart_param_config(EX_UART_NUM, &uart_config);
     uart_set_pin(EX_UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+}
+
+/**
+ * @brief LRC Check
+ * 帧头校验和 = ~（帧头+应用层数据长度的校验） + 1
+ * 发送校验和 = ~ (校验密码+命令+数据内容) + 1
+ * 接收校验和 = ~（校验密码+响应命令+错误码+数据内容） + 1
+ * @param {uint8_t} *data
+ * @param {uint16_t} length
+ * @return {uint8_t}
+ */
+static uint8_t LRC_Check(uint8_t *data, uint16_t length)
+{
+    uint16_t lrc = 0;
+    for (uint16_t i = 0; i < length; i++)
+    {
+        lrc += data[i];
+    }
+    return (uint8_t)((~lrc) + 1);
 }
 
 void FPM383C_Task(void *pvParameters)
@@ -41,19 +98,176 @@ void FPM383C_Task(void *pvParameters)
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
     p->tag = "FPM383C_Task";
     esp_log_level_set(p->tag, ESP_LOG_INFO);
-    // uint8_t buf[] = "hello world\r\n";
+    /* 获取模块ID */
+    uart_write_bytes(EX_UART_NUM, getModuleID, sizeof(getModuleID));
+
+    vTaskDelay(pdMS_TO_TICKS(200));
+    // uart_write_bytes(EX_UART_NUM, autoLogon, sizeof(autoLogon));
+    // uart_write_bytes(EX_UART_NUM, delete, sizeof(delete));
+    // uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+    // uart_write_bytes(EX_UART_NUM, heartBeat, sizeof(heartBeat));
+
+    // uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
+    // vTaskDelay(pdMS_TO_TICKS(2000));
+    // uart_write_bytes(EX_UART_NUM, led_red, sizeof(led_red));
+    // vTaskDelay(pdMS_TO_TICKS(2000));
+    // uart_write_bytes(EX_UART_NUM, led_green, sizeof(led_green));
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // uart_write_bytes(EX_UART_NUM, led_close, sizeof(led_close));
+
+    uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+
+    BaseType_t xReturn = pdTRUE;
+    uint8_t r_queue[4];
+    static uint8_t count = 0;
     while (1)
     {
-        // ESP_LOGI(FPM383C_TASK_TAG, "FPM383C TASK");
-        // FPM383C_Send_Bytes(buf, sizeof(buf));
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        xReturn = xQueueReceive(p->queue, r_queue, portMAX_DELAY);
+        if (pdTRUE == xReturn)
+        {
+            switch (r_queue[0])
+            {
+            case MATCH:
+                if (r_queue[1] == FPM383C_OK)
+                {
+                    ESP_LOGI(p->tag, "id:%d", r_queue[2] << 8 | r_queue[3]);
+                }
+                else if (r_queue[1] == FPM383C_TIMEOUT)
+                {
+                    count++;
+                    if (count == 5)
+                    {
+                        uart_write_bytes(EX_UART_NUM, normalSleep, sizeof(normalSleep));
+                        ESP_LOGI(p->tag, "enter Normal Sleep");
+                        count = 0;
+                    }
+                }
+                uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+                break;
+            default:
+                break;
+            }
+        }
+        else
+            ESP_LOGI(p->tag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
     }
 }
 
-// static void FPM383C_Recv_IRQHandler(void)
-// {
-// }
+static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t size)
+{
+    /* 帧头校验 */
+    if (data[10] != LRC_Check(data, 10))
+    {
+        ESP_LOGI(p->rTag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
+        ESP_LOGI(p->rTag, "True Value : %02X", LRC_Check(data, 10));
+        return;
+    }
+    /* 校验和 */
+    if (data[size - 1] != LRC_Check(data + 11, size - 12))
+    {
+        ESP_LOGI(p->rTag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
+        ESP_LOGI(p->rTag, "True Value : %02X", LRC_Check(data + 11, size - 12));
+        return;
+    }
+    /* 校验密码 */
+    if ((data[11] << 24 | data[12] << 16 | data[13] << 8 | data[14]) != p->password)
+    {
+        ESP_LOGI(p->rTag, "[ERROR] password %s %d", __FUNCTION__, __LINE__);
+        return;
+    }
+
+    uint16_t cmd = data[15] << 8 | data[16];
+    int error = data[17] << 24 | data[18] << 16 | data[19] << 8 | data[20];
+    BaseType_t xReturn = pdPASS;
+    uint8_t s_queue[4] = {0};
+    /* 错误码 */
+    if (error != 0)
+    {
+        ESP_LOGI(p->rTag, "[ERROR] %08X", error);
+    }
+    switch (cmd)
+    {
+    case 0x0301: // 获取指纹模块id
+        if (error == 0)
+        {
+            strncpy(p->id, (char *)(data + 21), 16);
+            ESP_LOGI(p->rTag, "ID:%s", p->id);
+        }
+        break;
+    case 0x0118: // 自动注册
+        if (error == 0)
+        {
+            uint8_t count = data[21];
+            uint16_t id = data[22] << 8 | data[23];
+            uint8_t progress = data[24];
+            if (count == 0xff && progress == 0x64)
+            {
+                ESP_LOGI(p->rTag, "[auto log-on success] id:%d", id);
+            }
+            else
+            {
+                ESP_LOGI(p->rTag, "[auto log-on progress] id:%d count:%d progress:%d%%", id, count, progress);
+            }
+        }
+        break;
+    case 0x0123: // 指纹匹配
+        if (error == 0)
+        {
+            uint16_t result = data[21] << 8 | data[22];
+            uint16_t score = data[23] << 8 | data[24];
+            uint16_t match_id = data[25] << 8 | data[26];
+            if (result != 0)
+            {
+                ESP_LOGI(p->rTag, "[MATCH] id:%d score:%d", match_id, score);
+                s_queue[0] = MATCH;
+                s_queue[1] = FPM383C_OK;
+                s_queue[2] = match_id >> 8;
+                s_queue[3] = match_id;
+                xReturn = xQueueSend(p->queue, s_queue, 0);
+                if (xReturn != pdPASS)
+                    ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+            }
+            else
+            {
+                ESP_LOGI(p->rTag, "[MATCH] not found");
+                s_queue[0] = MATCH;
+                s_queue[1] = FPM383C_ERROR;
+                s_queue[2] = 0;
+                s_queue[3] = 0;
+                xReturn = xQueueSend(p->queue, s_queue, 0);
+                if (xReturn != pdPASS)
+                    ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+            }
+        }
+        else if (error == 0x8 || error == 0x9)
+        {
+            s_queue[0] = MATCH;
+            s_queue[1] = FPM383C_TIMEOUT;
+            s_queue[2] = 0;
+            s_queue[3] = 0;
+            xReturn = xQueueSend(p->queue, s_queue, 0);
+            if (xReturn != pdPASS)
+                ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+        }
+
+        break;
+    case 0x0136: // 删除指纹
+        if (error == 0)
+        {
+            ESP_LOGI(p->rTag, "[DELETE] success");
+        }
+        break;
+    case 0x020F: // LED
+        if (error == 0)
+        {
+            ESP_LOGI(p->rTag, "[LED] change");
+        }
+        break;
+    default:
+        break;
+    }
+}
 
 void FPM383C_Recv_Task(void *pvParameters)
 {
@@ -65,7 +279,7 @@ void FPM383C_Recv_Task(void *pvParameters)
     for (;;)
     {
         // Waiting for UART event.                   等待串口事件队列
-        if (xQueueReceive(p->queue, (void *)&event, (portTickType)portMAX_DELAY))
+        if (xQueueReceive(p->uart_queue, (void *)&event, (portTickType)portMAX_DELAY))
         {
             bzero(dtmp, RD_BUF_SIZE); // 清空动态申请的队列
             switch (event.type)
@@ -74,21 +288,22 @@ void FPM383C_Recv_Task(void *pvParameters)
                 uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY); // 获取数据
                 ESP_LOGI(p->rTag, "rx: %d", event.size);
                 for (int i = 0; i < event.size; i++)
-                    ESP_LOGI(p->rTag, "%02X ", dtmp[i]);
-                uart_write_bytes(EX_UART_NUM, (const char *)dtmp, event.size); // 发送数据
+                    printf("%02X ", dtmp[i]);
+                printf("\r\n");
+                FPM383C_Recv_IRQHandler(p, dtmp, event.size);
                 break;
             case UART_FIFO_OVF: // 检测到硬件 FIFO 溢出事件
                 ESP_LOGI(p->rTag, "hw fifo overflow");
                 // 如果fifo溢出发生，你应该考虑为你的应用程序添加流量控制。
                 // ISR已经重置了rx FIFO，例如，我们直接刷新rx缓冲区来读取更多的数据。
                 uart_flush_input(EX_UART_NUM); // 清除输入缓冲区，丢弃所有环缓冲区中的数据
-                xQueueReset(p->queue);         // 重置一个队列到它原来的空状态。返回值是现在过时，并且总是设置为pdPASS。
+                xQueueReset(p->uart_queue);    // 重置一个队列到它原来的空状态。返回值是现在过时，并且总是设置为pdPASS。
                 break;
             case UART_BUFFER_FULL: // UART RX 缓冲器满事件
                 ESP_LOGI(p->rTag, "ring buffer full");
                 // 如果缓冲区满了，你应该考虑增加你的缓冲区大小
                 // 举个例子，我们这里直接刷新 rx 缓冲区，以便读取更多数据。uart_flush_input(EX_UART_NUM);
-                xQueueReset(p->queue); // 重置一个队列到它原来的空状态
+                xQueueReset(p->uart_queue); // 重置一个队列到它原来的空状态
                 break;
             case UART_BREAK: // UART 中断事件
                 ESP_LOGI(p->rTag, "uart rx break");

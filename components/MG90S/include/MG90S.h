@@ -25,6 +25,7 @@ typedef struct
     EventGroupHandle_t eventHandle;
 } MG90S_TypeDef, *PMG90S_TypeDef;
 
+void MG90S_Init(void);
 void MG90S_Task(void *pvParameters);
 
 #endif
