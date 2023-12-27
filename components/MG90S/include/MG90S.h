@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 09:29:04
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-27 17:00:23
+ * @LastEditTime: 2023-12-27 17:31:40
  * @FilePath: \SmartLock\components\MG90S\include\MG90S.h
  * @Description:
  */
@@ -21,11 +21,13 @@
 typedef struct
 {
     char *tag;
+    uint8_t state;
     TaskHandle_t taskHandle;
     EventGroupHandle_t eventHandle;
 } MG90S_TypeDef, *PMG90S_TypeDef;
 
 void MG90S_Init(PMG90S_TypeDef p);
-void MG90S_Task(void *pvParameters);
+void MG90S_Unlock(void);
+void MG90S_Lock(void);
 
 #endif

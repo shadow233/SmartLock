@@ -33,6 +33,8 @@
 
 PMG90S_TypeDef pMG90S = NULL;
 
+static void MG90S_Task(void *pvParameters);
+
 void MG90S_Init(PMG90S_TypeDef p)
 {
     BaseType_t xReturn = pdPASS;
@@ -67,6 +69,8 @@ void MG90S_Init(PMG90S_TypeDef p)
 #endif
         .hpoint = 0};
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+
+    p->state = MG90S_180_DUTY_DEGREE_90; // 当前状态
 
     /* Create Event */
     p->eventHandle = xEventGroupCreate();
@@ -178,7 +182,25 @@ void MG90S_180_Angle(uint32_t degree)
 /*****************************************END****************************************/
 #endif
 
-void MG90S_Task(void *pvParameters)
+void MG90S_Unlock(void)
+{
+    if (pMG90S->state != DEGREE_0_EVENT)
+    {
+        pMG90S->state = DEGREE_0_EVENT;
+        xEventGroupSetBits(pMG90S->eventHandle, DEGREE_0_EVENT);
+    }
+}
+
+void MG90S_Lock(void)
+{
+    if (pMG90S->state != DEGREE_180_EVENT)
+    {
+        pMG90S->state = DEGREE_180_EVENT;
+        xEventGroupSetBits(pMG90S->eventHandle, DEGREE_180_EVENT);
+    }
+}
+
+static void MG90S_Task(void *pvParameters)
 {
     PMG90S_TypeDef p = (PMG90S_TypeDef)pvParameters;
     EventBits_t r_event;

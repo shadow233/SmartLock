@@ -9,7 +9,7 @@
 
 #include "main.h"
 
-#define VERSION "V0.1.9"
+#define VERSION "V0.2.0"
 
 PRunParam_t pRunParam = NULL;
 

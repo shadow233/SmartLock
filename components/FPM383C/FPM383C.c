@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-27 16:56:11
+ * @LastEditTime: 2023-12-27 17:21:42
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -60,6 +60,11 @@ uint8_t deepSleep[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0
 /* 需要修改 */
 /* 指纹特征清除（同步） */
 uint8_t delete[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0A, 0x83, 0x00, 0x00, 0x00, 0x00, 0x01, 0x36, 0x00, 0x00, 0x04, 0xC5};
+
+static void FPM383C_Task(void *pvParameters);
+static void FPM383C_Recv_Task(void *pvParameters);
+extern void MG90S_Unlock(void);
+extern void MG90S_Lock(void);
 
 static void IRAM_ATTR TOUCH_OUT_IRQHandler(void *arg)
 {
@@ -156,7 +161,7 @@ static uint8_t LRC_Check(uint8_t *data, uint16_t length)
     return (uint8_t)((~lrc) + 1);
 }
 
-void FPM383C_Task(void *pvParameters)
+static void FPM383C_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
 
@@ -188,10 +193,12 @@ void FPM383C_Task(void *pvParameters)
                     if (id == 0 || id == 2 || id == 4)
                     {
                         /* 关锁 */
+                        MG90S_Lock();
                     }
                     else if (id == 1 || id == 3)
                     {
                         /* 开锁 */
+                        MG90S_Unlock();
                     }
 
                     uart_write_bytes(EX_UART_NUM, led_green, sizeof(led_green));
@@ -371,7 +378,7 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
     }
 }
 
-void FPM383C_Recv_Task(void *pvParameters)
+static void FPM383C_Recv_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
     uart_event_t event;

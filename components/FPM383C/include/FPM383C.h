@@ -24,7 +24,5 @@ typedef struct
 } FPM383C_TypeDef, *PFPM383C_TypeDef;
 
 void FPM383C_Init(PFPM383C_TypeDef p);
-void FPM383C_Task(void *pvParameters);
-void FPM383C_Recv_Task(void *pvParameters);
 
 #endif
