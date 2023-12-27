@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "string.h"
 
 // #define MG90S_360_EN
 #define MG90S_180_EN
@@ -30,8 +31,18 @@
 #define MG90S_180_DUTY_DEGREE_180 (1024) // 12.5%
 #endif
 
-void MG90S_Init(void)
+PMG90S_TypeDef pMG90S = NULL;
+
+void MG90S_Init(PMG90S_TypeDef p)
 {
+    BaseType_t xReturn = pdPASS;
+    pMG90S = malloc(sizeof(MG90S_TypeDef));
+    p = pMG90S;
+    bzero(p, sizeof(MG90S_TypeDef));
+
+    p->tag = "MG90S_Task";
+    esp_log_level_set(p->tag, ESP_LOG_INFO);
+
     // Prepare and then apply the LEDC PWM timer configuration
     ledc_timer_config_t ledc_timer = {
         .speed_mode = LEDC_MODE,
@@ -56,6 +67,23 @@ void MG90S_Init(void)
 #endif
         .hpoint = 0};
     ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
+
+    /* Create Event */
+    p->eventHandle = xEventGroupCreate();
+    if (p->eventHandle != NULL)
+        ESP_LOGI(p->tag, "Create MG90S_Event Success!");
+
+    /* Create Task */
+    xReturn = xTaskCreate((TaskFunction_t)MG90S_Task,
+                          (const char *)"MG90S_Task",
+                          (uint16_t)2048,
+                          (void *)(p),
+                          (UBaseType_t)3,
+                          (TaskHandle_t *)&(p->taskHandle));
+    if (pdPASS == xReturn)
+        ESP_LOGI(p->tag, "Create MG90S_Task Success!");
+    else
+        return;
 }
 
 /*
@@ -153,8 +181,6 @@ void MG90S_180_Angle(uint32_t degree)
 void MG90S_Task(void *pvParameters)
 {
     PMG90S_TypeDef p = (PMG90S_TypeDef)pvParameters;
-    p->tag = "MG90S_Task";
-    esp_log_level_set(p->tag, ESP_LOG_INFO);
     EventBits_t r_event;
     while (1)
     {

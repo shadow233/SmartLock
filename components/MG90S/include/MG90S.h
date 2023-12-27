@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 09:29:04
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-25 11:52:33
+ * @LastEditTime: 2023-12-27 17:00:23
  * @FilePath: \SmartLock\components\MG90S\include\MG90S.h
  * @Description:
  */
@@ -25,7 +25,7 @@ typedef struct
     EventGroupHandle_t eventHandle;
 } MG90S_TypeDef, *PMG90S_TypeDef;
 
-void MG90S_Init(void);
+void MG90S_Init(PMG90S_TypeDef p);
 void MG90S_Task(void *pvParameters);
 
 #endif

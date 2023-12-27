@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-27 14:16:20
+ * @LastEditTime: 2023-12-27 16:56:11
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -73,8 +73,21 @@ static void IRAM_ATTR TOUCH_OUT_IRQHandler(void *arg)
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
+PFPM383C_TypeDef pFPM383C = NULL;
+
 void FPM383C_Init(PFPM383C_TypeDef p)
 {
+    BaseType_t xReturn = pdPASS;
+    pFPM383C = malloc(sizeof(FPM383C_TypeDef));
+    p = pFPM383C;
+    bzero(p, sizeof(FPM383C_TypeDef));
+    p->tag = "FPM383C_Task";
+    esp_log_level_set(p->tag, ESP_LOG_INFO);
+
+    p->queue = xQueueCreate(20, 4);
+    if (p->queue != NULL)
+        ESP_LOGI(p->tag, "Create FPM383C_Queue Success!");
+
     const uart_config_t uart_config = {
         .baud_rate = 57600,
         .data_bits = UART_DATA_8_BITS,
@@ -83,7 +96,7 @@ void FPM383C_Init(PFPM383C_TypeDef p)
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_DEFAULT,
     };
-    // We won't use a buffer for sending data.
+
     uart_driver_install(EX_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 20, &(p->uart_queue), 0);
     uart_param_config(EX_UART_NUM, &uart_config);
     uart_set_pin(EX_UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
@@ -96,18 +109,32 @@ void FPM383C_Init(PFPM383C_TypeDef p)
         .intr_type = GPIO_INTR_POSEDGE,
     };
     gpio_config(&io_conf);
-
-    // change gpio interrupt type for one pin
     gpio_set_intr_type(TOUCH_OUT_PIN, GPIO_INTR_POSEDGE);
-
-    // install gpio isr service
     gpio_install_isr_service(0);
-
-    // hook isr handler for specific gpio pin
     gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)p->queue);
-
-    // remove isr handler for gpio number.
     gpio_isr_handler_remove(TOUCH_OUT_PIN);
+
+    /* Create Task */
+    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task,
+                          (const char *)"FPM383C_Task",
+                          (uint16_t)4096,
+                          (void *)(p),
+                          (UBaseType_t)4,
+                          (TaskHandle_t *)&(p->taskHandle));
+    if (pdPASS == xReturn)
+        ESP_LOGI(p->tag, "Create FPM383C_Task Success!");
+    else
+        return;
+    xReturn = xTaskCreate((TaskFunction_t)FPM383C_Recv_Task,
+                          (const char *)"FPM383C_Recv_Task",
+                          (uint16_t)4096,
+                          (void *)(p),
+                          (UBaseType_t)5,
+                          (TaskHandle_t *)&(p->rTaskHandle));
+    if (pdPASS == xReturn)
+        ESP_LOGI(p->tag, "Create FPM383C_Recv_Task Success!");
+    else
+        return;
 }
 
 /**
@@ -132,8 +159,7 @@ static uint8_t LRC_Check(uint8_t *data, uint16_t length)
 void FPM383C_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
-    p->tag = "FPM383C_Task";
-    esp_log_level_set(p->tag, ESP_LOG_INFO);
+
     /* 获取模块ID */
     uart_write_bytes(EX_UART_NUM, getModuleID, sizeof(getModuleID));
     vTaskDelay(pdMS_TO_TICKS(200));
@@ -145,18 +171,29 @@ void FPM383C_Task(void *pvParameters)
 
     BaseType_t xReturn = pdTRUE;
     uint8_t r_queue[4];
+    uint16_t id = 0;
     static uint8_t count = 0;
     while (1)
     {
         xReturn = xQueueReceive(p->queue, r_queue, portMAX_DELAY);
-        if (pdTRUE == xReturn)
+        if (xReturn == pdTRUE)
         {
             switch (r_queue[0])
             {
             case MATCH:
                 if (r_queue[1] == FPM383C_OK)
                 {
-                    ESP_LOGI(p->tag, "id:%d", r_queue[2] << 8 | r_queue[3]);
+                    id = r_queue[2] << 8 | r_queue[3];
+                    ESP_LOGI(p->tag, "id:%d", id);
+                    if (id == 0 || id == 2 || id == 4)
+                    {
+                        /* 关锁 */
+                    }
+                    else if (id == 1 || id == 3)
+                    {
+                        /* 开锁 */
+                    }
+
                     uart_write_bytes(EX_UART_NUM, led_green, sizeof(led_green));
                     vTaskDelay(pdMS_TO_TICKS(200));
                     uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
@@ -211,21 +248,21 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
     /* 帧头校验 */
     if (data[10] != LRC_Check(data, 10))
     {
-        ESP_LOGI(p->rTag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
-        ESP_LOGI(p->rTag, "True Value : %02X", LRC_Check(data, 10));
+        ESP_LOGI(p->tag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
+        ESP_LOGI(p->tag, "True Value : %02X", LRC_Check(data, 10));
         return;
     }
     /* 校验和 */
     if (data[size - 1] != LRC_Check(data + 11, size - 12))
     {
-        ESP_LOGI(p->rTag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
-        ESP_LOGI(p->rTag, "True Value : %02X", LRC_Check(data + 11, size - 12));
+        ESP_LOGI(p->tag, "[ERROR] LRC %s %d", __FUNCTION__, __LINE__);
+        ESP_LOGI(p->tag, "True Value : %02X", LRC_Check(data + 11, size - 12));
         return;
     }
     /* 校验密码 */
     if ((data[11] << 24 | data[12] << 16 | data[13] << 8 | data[14]) != p->password)
     {
-        ESP_LOGI(p->rTag, "[ERROR] password %s %d", __FUNCTION__, __LINE__);
+        ESP_LOGI(p->tag, "[ERROR] password %s %d", __FUNCTION__, __LINE__);
         return;
     }
 
@@ -236,7 +273,7 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
     /* 错误码 */
     if (error != 0)
     {
-        ESP_LOGI(p->rTag, "[ERROR] %08X", error);
+        ESP_LOGI(p->tag, "[ERROR] %08X", error);
     }
     switch (cmd)
     {
@@ -244,7 +281,7 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
         if (error == 0)
         {
             strncpy(p->id, (char *)(data + 21), 16);
-            ESP_LOGI(p->rTag, "ID:%s", p->id);
+            ESP_LOGI(p->tag, "ID:%s", p->id);
         }
         break;
     case 0x0118: // 自动注册
@@ -255,11 +292,11 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
             uint8_t progress = data[24];
             if (count == 0xff && progress == 0x64)
             {
-                ESP_LOGI(p->rTag, "[auto log-on success] id:%d", id);
+                ESP_LOGI(p->tag, "[auto log-on success] id:%d", id);
             }
             else
             {
-                ESP_LOGI(p->rTag, "[auto log-on progress] id:%d count:%d progress:%d%%", id, count, progress);
+                ESP_LOGI(p->tag, "[auto log-on progress] id:%d count:%d progress:%d%%", id, count, progress);
             }
         }
         break;
@@ -271,25 +308,25 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
             uint16_t match_id = data[25] << 8 | data[26];
             if (result != 0)
             {
-                ESP_LOGI(p->rTag, "[MATCH] id:%d score:%d", match_id, score);
+                ESP_LOGI(p->tag, "[MATCH] id:%d score:%d", match_id, score);
                 s_queue[0] = MATCH;
                 s_queue[1] = FPM383C_OK;
                 s_queue[2] = match_id >> 8;
                 s_queue[3] = match_id;
                 xReturn = xQueueSend(p->queue, s_queue, 0);
                 if (xReturn != pdPASS)
-                    ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+                    ESP_LOGI(p->tag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
             }
             else
             {
-                ESP_LOGI(p->rTag, "[MATCH] not found");
+                ESP_LOGI(p->tag, "[MATCH] not found");
                 s_queue[0] = MATCH;
                 s_queue[1] = FPM383C_ERROR;
                 s_queue[2] = 0;
                 s_queue[3] = 0;
                 xReturn = xQueueSend(p->queue, s_queue, 0);
                 if (xReturn != pdPASS)
-                    ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+                    ESP_LOGI(p->tag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
             }
         }
         else if (error == 0x8 || error == 0x9)
@@ -300,20 +337,20 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
             s_queue[3] = 0;
             xReturn = xQueueSend(p->queue, s_queue, 0);
             if (xReturn != pdPASS)
-                ESP_LOGI(p->rTag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
+                ESP_LOGI(p->tag, "[ERROR] %d %s %d", xReturn, __FUNCTION__, __LINE__);
         }
 
         break;
     case 0x0136: // 删除指纹
         if (error == 0)
         {
-            ESP_LOGI(p->rTag, "[DELETE] success");
+            ESP_LOGI(p->tag, "[DELETE] success");
         }
         break;
     case 0x020F: // LED
         if (error == 0)
         {
-            ESP_LOGI(p->rTag, "[LED] change");
+            ESP_LOGI(p->tag, "[LED] change");
         }
         break;
     case 0x020C: // LED
@@ -321,11 +358,11 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
         {
             if (data[17] == 0)
             {
-                ESP_LOGI(p->rTag, "[Sleep] Enter Normal Sleep");
+                ESP_LOGI(p->tag, "[Sleep] Enter Normal Sleep");
             }
             else
             {
-                ESP_LOGI(p->rTag, "[Sleep] Enter Deep Sleep");
+                ESP_LOGI(p->tag, "[Sleep] Enter Deep Sleep");
             }
         }
         break;
@@ -337,8 +374,6 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
 void FPM383C_Recv_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
-    p->rTag = "FPM383C_Recv_Task";
-    esp_log_level_set(p->rTag, ESP_LOG_INFO);
     uart_event_t event;
     uint8_t *dtmp = (uint8_t *)malloc(RD_BUF_SIZE); // 动态申请内存
     for (;;)
@@ -351,36 +386,36 @@ void FPM383C_Recv_Task(void *pvParameters)
             {
             case UART_DATA:                                                    // UART接收数据的事件
                 uart_read_bytes(EX_UART_NUM, dtmp, event.size, portMAX_DELAY); // 获取数据
-                ESP_LOGI(p->rTag, "rx: %d", event.size);
+                ESP_LOGI(p->tag, "rx: %d", event.size);
                 for (int i = 0; i < event.size; i++)
                     printf("%02X ", dtmp[i]);
                 printf("\r\n");
                 FPM383C_Recv_IRQHandler(p, dtmp, event.size);
                 break;
             case UART_FIFO_OVF: // 检测到硬件 FIFO 溢出事件
-                ESP_LOGI(p->rTag, "hw fifo overflow");
+                ESP_LOGI(p->tag, "hw fifo overflow");
                 // 如果fifo溢出发生，你应该考虑为你的应用程序添加流量控制。
                 // ISR已经重置了rx FIFO，例如，我们直接刷新rx缓冲区来读取更多的数据。
                 uart_flush_input(EX_UART_NUM); // 清除输入缓冲区，丢弃所有环缓冲区中的数据
                 xQueueReset(p->uart_queue);    // 重置一个队列到它原来的空状态。返回值是现在过时，并且总是设置为pdPASS。
                 break;
             case UART_BUFFER_FULL: // UART RX 缓冲器满事件
-                ESP_LOGI(p->rTag, "ring buffer full");
+                ESP_LOGI(p->tag, "ring buffer full");
                 // 如果缓冲区满了，你应该考虑增加你的缓冲区大小
                 // 举个例子，我们这里直接刷新 rx 缓冲区，以便读取更多数据。uart_flush_input(EX_UART_NUM);
                 xQueueReset(p->uart_queue); // 重置一个队列到它原来的空状态
                 break;
             case UART_BREAK: // UART 中断事件
-                ESP_LOGI(p->rTag, "uart rx break");
+                ESP_LOGI(p->tag, "uart rx break");
                 break;
             case UART_PARITY_ERR: // UART奇偶校验错误事件
-                ESP_LOGI(p->rTag, "uart parity error");
+                ESP_LOGI(p->tag, "uart parity error");
                 break;
             case UART_FRAME_ERR: // UART 帧错误事件
-                ESP_LOGI(p->rTag, "uart frame error");
+                ESP_LOGI(p->tag, "uart frame error");
                 break;
             default: // 其他
-                ESP_LOGI(p->rTag, "uart event type: %d", event.type);
+                ESP_LOGI(p->tag, "uart event type: %d", event.type);
                 break;
             }
         }
