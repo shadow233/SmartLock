@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-26 17:50:52
+ * @LastEditTime: 2023-12-27 14:20:49
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.1.7"
+#define VERSION "V0.1.8"
 
 PRunParam_t pRunParam = NULL;
 
@@ -21,14 +21,22 @@ void app_main(void)
 {
     BaseType_t xReturn = pdPASS; /* 定义一个创建信息返回值，默认为 pdPASS */
 
+    /* pRunParam Init */
     pRunParam = malloc(sizeof(RunParam_t));
     pRunParam->tag = "app_main";
+    esp_log_level_set(pRunParam->tag, ESP_LOG_INFO);
     pRunParam->pMG90S = malloc(sizeof(MG90S_TypeDef));
     pRunParam->pFPM383C = malloc(sizeof(FPM383C_TypeDef));
     bzero(pRunParam->pMG90S, sizeof(MG90S_TypeDef));
     bzero(pRunParam->pFPM383C, sizeof(FPM383C_TypeDef));
+    pRunParam->pFPM383C->queue = xQueueCreate(20, 4);
+    if (pRunParam->pFPM383C->queue != NULL)
+        ESP_LOGI(pRunParam->tag, "Create FPM383C_Queue Success!");
+    pRunParam->pMG90S->eventHandle = xEventGroupCreate();
+    if (pRunParam->pMG90S->eventHandle != NULL)
+        ESP_LOGI(pRunParam->tag, "Create MG90S_Event Success!");
 
-    esp_log_level_set(pRunParam->tag, ESP_LOG_INFO);
+    /* components Init */
     led_init();
     MG90S_Init();
     FPM383C_Init(pRunParam->pFPM383C);
@@ -36,16 +44,6 @@ void app_main(void)
     vTaskDelay(pdMS_TO_TICKS(100));
 
     ESP_LOGI(pRunParam->tag, "SMARTLOCK START %s", VERSION);
-
-    /* 创建 Test_Queue */
-    pRunParam->pFPM383C->queue = xQueueCreate(4, 20);
-    if (pRunParam->pFPM383C->queue != NULL)
-        ESP_LOGI(pRunParam->tag, "Create FPM383C_Queue Success!");
-
-    /* Create Event */
-    pRunParam->pMG90S->eventHandle = xEventGroupCreate();
-    if (pRunParam->pMG90S->eventHandle != NULL)
-        ESP_LOGI(pRunParam->tag, "Create MG90S_Event Success!");
 
     /* Create Task */
     xReturn = xTaskCreate((TaskFunction_t)MAIN_Task,

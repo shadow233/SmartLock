@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-26 17:35:45
+ * @LastEditTime: 2023-12-27 14:16:20
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -34,7 +34,8 @@ typedef enum
 {
     FPM383C_OK = 0,
     FPM383C_ERROR,
-    FPM383C_TIMEOUT
+    FPM383C_TIMEOUT,
+    FPM383C_AWAKEN
 } FPM383C_State_Typedef;
 
 /* 直接使用 */
@@ -62,14 +63,14 @@ uint8_t delete[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x0A, 
 
 static void IRAM_ATTR TOUCH_OUT_IRQHandler(void *arg)
 {
-    printf("isr_handler\r\n");
+    QueueHandle_t queue = (QueueHandle_t)arg;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+    uint8_t s_queue[4] = {MATCH, FPM383C_AWAKEN, 0, 0};
 
-    // remove isr handler for gpio number.
-    gpio_isr_handler_remove(TOUCH_OUT_PIN);
+    xQueueSendFromISR(queue, s_queue, &xHigherPriorityTaskWoken);
 
-    portYIELD_FROM_ISR();
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 void FPM383C_Init(PFPM383C_TypeDef p)
@@ -103,7 +104,7 @@ void FPM383C_Init(PFPM383C_TypeDef p)
     gpio_install_isr_service(0);
 
     // hook isr handler for specific gpio pin
-    gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)NULL);
+    gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)p->queue);
 
     // remove isr handler for gpio number.
     gpio_isr_handler_remove(TOUCH_OUT_PIN);
@@ -135,22 +136,11 @@ void FPM383C_Task(void *pvParameters)
     esp_log_level_set(p->tag, ESP_LOG_INFO);
     /* 获取模块ID */
     uart_write_bytes(EX_UART_NUM, getModuleID, sizeof(getModuleID));
-
     vTaskDelay(pdMS_TO_TICKS(200));
-    // uart_write_bytes(EX_UART_NUM, autoLogon, sizeof(autoLogon));
-    // uart_write_bytes(EX_UART_NUM, delete, sizeof(delete));
-    // uart_write_bytes(EX_UART_NUM, match, sizeof(match));
-    // uart_write_bytes(EX_UART_NUM, heartBeat, sizeof(heartBeat));
 
-    // vTaskDelay(pdMS_TO_TICKS(2000));
-    // uart_write_bytes(EX_UART_NUM, led_red, sizeof(led_red));
-    // vTaskDelay(pdMS_TO_TICKS(2000));
-    // uart_write_bytes(EX_UART_NUM, led_green, sizeof(led_green));
-    // vTaskDelay(pdMS_TO_TICKS(1000));
-
-    // uart_write_bytes(EX_UART_NUM, led_close, sizeof(led_close));
     uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
     vTaskDelay(pdMS_TO_TICKS(200));
+
     uart_write_bytes(EX_UART_NUM, match, sizeof(match));
 
     BaseType_t xReturn = pdTRUE;
@@ -179,11 +169,20 @@ void FPM383C_Task(void *pvParameters)
                     {
                         uart_write_bytes(EX_UART_NUM, led_close, sizeof(led_close));
                         vTaskDelay(pdMS_TO_TICKS(200));
-                        gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)NULL);
+                        gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)p->queue);
                         uart_write_bytes(EX_UART_NUM, normalSleep, sizeof(normalSleep));
                         vTaskDelay(pdMS_TO_TICKS(200));
                         count = 0;
                     }
+                }
+                else if (r_queue[1] == FPM383C_AWAKEN)
+                {
+                    ESP_LOGI(p->tag, "[AWAKEN]");
+                    // remove isr handler for gpio number.
+                    gpio_isr_handler_remove(TOUCH_OUT_PIN);
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    uart_write_bytes(EX_UART_NUM, led_blue, sizeof(led_blue));
+                    vTaskDelay(pdMS_TO_TICKS(200));
                 }
                 else
                 {
@@ -193,6 +192,10 @@ void FPM383C_Task(void *pvParameters)
                     vTaskDelay(pdMS_TO_TICKS(200));
                 }
                 uart_write_bytes(EX_UART_NUM, match, sizeof(match));
+                break;
+            case AUTOLOGON:
+                break;
+            case DELETE:
                 break;
             default:
                 break;
