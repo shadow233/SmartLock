@@ -1,5 +1,10 @@
 # ESP32-C3使用手册
 
+> 更新时间：2023.12.28
+>
+> 文档版本：V1.0
+>
+
 ## 安装
 
 VS Code+ESP-IDF扩展 网上都有
@@ -109,3 +114,6 @@ VS Code+ESP-IDF扩展 网上都有
 [【ESP32-IDF+VScode】开发笔记（一）：从点灯开始——点亮LED\_vscode esp32-CSDN博客](https://blog.csdn.net/weixin_43803230/article/details/131511563)
 
 [【导航】ESP32 教学篇目录 【快速跳转】\_esp32 网页切换-CSDN博客](https://blog.csdn.net/m0_50064262/article/details/120250151)
+
+[ESP32接入米家-小爱同学-IDF环境-巴法平台-CSDN博客](https://blog.csdn.net/lum250/article/details/128667774)
+

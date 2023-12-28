@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-28 13:55:31
+ * @LastEditTime: 2023-12-28 17:47:04
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.2.1"
+#define VERSION "V0.2.2"
 
 PRunParam_t pRunParam = NULL;
 
