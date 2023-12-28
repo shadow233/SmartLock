@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-27 17:21:42
+ * @LastEditTime: 2023-12-28 13:46:14
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -11,7 +11,7 @@
 #include "FPM383C.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-// #include "led.h"
+#include "esp_sleep.h"
 
 #define TXD_PIN (GPIO_NUM_0)
 #define RXD_PIN (GPIO_NUM_1)
@@ -22,6 +22,10 @@
 #define RD_BUF_SIZE (BUF_SIZE) // 读取字符大小
 
 #define TOUCH_OUT_PIN (GPIO_NUM_3)
+// #define POWER_PIN (GPIO_NUM_2)
+
+// #define POWER_ON gpio_set_level(POWER_PIN, 1)
+// #define POWER_OFF gpio_set_level(POWER_PIN, 0)
 
 typedef enum
 {
@@ -93,6 +97,7 @@ void FPM383C_Init(PFPM383C_TypeDef p)
     if (p->queue != NULL)
         ESP_LOGI(p->tag, "Create FPM383C_Queue Success!");
 
+    /* RX TX */
     const uart_config_t uart_config = {
         .baud_rate = 57600,
         .data_bits = UART_DATA_8_BITS,
@@ -106,8 +111,9 @@ void FPM383C_Init(PFPM383C_TypeDef p)
     uart_param_config(EX_UART_NUM, &uart_config);
     uart_set_pin(EX_UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
+    /* touch_out */
     const gpio_config_t io_conf = {
-        .pin_bit_mask = 1 << TOUCH_OUT_PIN,
+        .pin_bit_mask = BIT(TOUCH_OUT_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_ENABLE,
@@ -118,6 +124,17 @@ void FPM383C_Init(PFPM383C_TypeDef p)
     gpio_install_isr_service(0);
     gpio_isr_handler_add(TOUCH_OUT_PIN, TOUCH_OUT_IRQHandler, (void *)p->queue);
     gpio_isr_handler_remove(TOUCH_OUT_PIN);
+    ESP_ERROR_CHECK(esp_deep_sleep_enable_gpio_wakeup(BIT(TOUCH_OUT_PIN), ESP_GPIO_WAKEUP_GPIO_HIGH));
+
+    // /* VCC */
+    // const gpio_config_t vccIO_conf = {
+    //     .pin_bit_mask = 1 << POWER_PIN,
+    //     .mode = GPIO_MODE_OUTPUT,
+    //     .pull_up_en = GPIO_PULLUP_ENABLE,
+    //     .pull_down_en = GPIO_PULLDOWN_DISABLE,
+    //     .intr_type = GPIO_INTR_DISABLE,
+    // };
+    // gpio_config(&vccIO_conf);
 
     /* Create Task */
     xReturn = xTaskCreate((TaskFunction_t)FPM383C_Task,
@@ -164,6 +181,11 @@ static uint8_t LRC_Check(uint8_t *data, uint16_t length)
 static void FPM383C_Task(void *pvParameters)
 {
     PFPM383C_TypeDef p = (PFPM383C_TypeDef)pvParameters;
+
+    // POWER_OFF;
+    // vTaskDelay(pdMS_TO_TICKS(10));
+    // POWER_ON;
+    // vTaskDelay(pdMS_TO_TICKS(200));
 
     /* 获取模块ID */
     uart_write_bytes(EX_UART_NUM, getModuleID, sizeof(getModuleID));
@@ -217,6 +239,7 @@ static void FPM383C_Task(void *pvParameters)
                         uart_write_bytes(EX_UART_NUM, normalSleep, sizeof(normalSleep));
                         vTaskDelay(pdMS_TO_TICKS(200));
                         count = 0;
+                        esp_deep_sleep_start();
                     }
                 }
                 else if (r_queue[1] == FPM383C_AWAKEN)
@@ -363,14 +386,7 @@ static void FPM383C_Recv_IRQHandler(PFPM383C_TypeDef p, uint8_t *data, uint16_t 
     case 0x020C: // LED
         if (error == 0)
         {
-            if (data[17] == 0)
-            {
-                ESP_LOGI(p->tag, "[Sleep] Enter Normal Sleep");
-            }
-            else
-            {
-                ESP_LOGI(p->tag, "[Sleep] Enter Deep Sleep");
-            }
+            ESP_LOGI(p->tag, "[Sleep] Enter Sleep");
         }
         break;
     default:
