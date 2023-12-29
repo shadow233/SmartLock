@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-21 15:42:09
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-28 13:46:14
+ * @LastEditTime: 2023-12-29 13:43:44
  * @FilePath: \SmartLock\components\FPM383C\FPM383C.c
  * @Description:
  */
@@ -239,7 +239,7 @@ static void FPM383C_Task(void *pvParameters)
                         uart_write_bytes(EX_UART_NUM, normalSleep, sizeof(normalSleep));
                         vTaskDelay(pdMS_TO_TICKS(200));
                         count = 0;
-                        esp_deep_sleep_start();
+                        // esp_deep_sleep_start();
                     }
                 }
                 else if (r_queue[1] == FPM383C_AWAKEN)

@@ -2,3 +2,4 @@
 build/
 sdkconfig.old
 debug.log
+components/wifi_mqtt/include/wifi_mqtt_def.h

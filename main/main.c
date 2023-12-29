@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-28 17:47:04
+ * @LastEditTime: 2023-12-29 16:56:05
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.2.2"
+#define VERSION "V0.2.3"
 
 PRunParam_t pRunParam = NULL;
 
@@ -28,11 +28,13 @@ void app_main(void)
 
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP_LOGI(pRunParam->tag, "SMARTLOCK START %s", VERSION);
+    ESP_LOGI(pRunParam->tag, "Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
 
     /* components Init */
     led_init();
     MG90S_Init(pRunParam->pMG90S);
     FPM383C_Init(pRunParam->pFPM383C);
+    mqtt_Init();
 
     /* Create Task */
     xReturn = xTaskCreate((TaskFunction_t)MAIN_Task,
