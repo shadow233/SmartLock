@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-28 17:47:42
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-29 16:51:28
+ * @LastEditTime: 2023-12-29 17:31:58
  * @FilePath: \SmartLock\components\wifi_mqtt\wifi_mqtt.c
  * @Description:
  */
@@ -30,6 +30,7 @@
 // #define DATA_TO_UNLOCK "xxx"               // off
 
 #define ESP_MAXIMUM_RETRY 5
+#define DEFAULT_LISTEN_INTERVAL 10
 
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -238,6 +239,7 @@ static void wifi_station_initialize(void)
         .sta = {
             .ssid = ESP_WIFI_SSID,
             .password = ESP_WIFI_PASS,
+            .listen_interval = DEFAULT_LISTEN_INTERVAL,
             // 启用WPA2模式，常用的WiFi连接方式
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
 
@@ -252,6 +254,9 @@ static void wifi_station_initialize(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     // 启动WiFi
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "esp_wifi_set_ps().");
+    esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
 
     ESP_LOGI(TAG, "wifi_station_initialize finished.");
 

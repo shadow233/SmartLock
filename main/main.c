@@ -2,14 +2,14 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-19 15:22:02
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-29 16:56:05
+ * @LastEditTime: 2023-12-29 17:45:30
  * @FilePath: \SmartLock\main\main.c
  * @Description:
  */
 
 #include "main.h"
 
-#define VERSION "V0.2.3"
+#define VERSION "V0.2.4"
 
 PRunParam_t pRunParam = NULL;
 
@@ -57,7 +57,7 @@ void MAIN_Task(void *pvParameters)
     // PRunParam_t p = (PRunParam_t)pvParameters;
     // const char *tag = "main";
     // esp_log_level_set(tag, ESP_LOG_INFO);
-    // uint8_t heartBeat[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
+    uint8_t heartBeat[] = {0xF1, 0x1F, 0xE2, 0x2E, 0xB6, 0x6B, 0xA8, 0x8A, 0x00, 0x07, 0x86, 0x00, 0x00, 0x00, 0x00, 0x03, 0x03, 0xFA};
 
     while (1)
     {
@@ -67,7 +67,7 @@ void MAIN_Task(void *pvParameters)
         // vTaskDelay(pdMS_TO_TICKS(1000));
         // xEventGroupSetBits(p->pMG90S->eventHandle, DEGREE_180_EVENT);
         // ESP_LOGI(tag, "hello world");
-        // uart_write_bytes(UART_NUM_1, heartBeat, sizeof(heartBeat));
+        uart_write_bytes(UART_NUM_1, heartBeat, sizeof(heartBeat));
 
         vTaskDelay(pdMS_TO_TICKS(1000));
         // vTaskDelay(1000 / portTICK_RATE_MS);
