@@ -2,7 +2,7 @@
 
 > 更新时间：2023.12.28
 >
-> 文档版本：V1.0
+> 文档版本：V1.1
 >
 
 ## 安装
@@ -116,4 +116,6 @@ VS Code+ESP-IDF扩展 网上都有
 [【导航】ESP32 教学篇目录 【快速跳转】\_esp32 网页切换-CSDN博客](https://blog.csdn.net/m0_50064262/article/details/120250151)
 
 [ESP32接入米家-小爱同学-IDF环境-巴法平台-CSDN博客](https://blog.csdn.net/lum250/article/details/128667774)
+
+[ESP-C3入门8. 连接WiFi并打印信息 - 知乎](https://zhuanlan.zhihu.com/p/610739958)
 
