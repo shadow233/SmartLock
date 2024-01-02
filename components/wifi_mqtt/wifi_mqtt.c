@@ -2,7 +2,7 @@
  * @Author: shadow MrHload163@163.com
  * @Date: 2023-12-28 17:47:42
  * @LastEditors: shadow MrHload163@163.com
- * @LastEditTime: 2023-12-29 17:31:58
+ * @LastEditTime: 2024-01-02 14:52:51
  * @FilePath: \SmartLock\components\wifi_mqtt\wifi_mqtt.c
  * @Description:
  */
@@ -19,6 +19,7 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "wifi_mqtt_def.h"
+#include "esp_pm.h"
 
 /* wifi_mqtt_def.h 中的信息 */
 // #define ESP_WIFI_SSID "xx"                 // wifi名
@@ -31,6 +32,7 @@
 
 #define ESP_MAXIMUM_RETRY 5
 #define DEFAULT_LISTEN_INTERVAL 10
+#define DEFAULT_BEACON_TIMEOUT 6
 
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -255,6 +257,8 @@ static void wifi_station_initialize(void)
     // 启动WiFi
     ESP_ERROR_CHECK(esp_wifi_start());
 
+    ESP_ERROR_CHECK(esp_wifi_set_inactive_time(WIFI_IF_STA, DEFAULT_BEACON_TIMEOUT));
+
     ESP_LOGI(TAG, "esp_wifi_set_ps().");
     esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
 
@@ -290,6 +294,21 @@ void mqtt_Init(void)
     esp_log_level_set("esp-tls", ESP_LOG_VERBOSE);
     esp_log_level_set("TRANSPORT", ESP_LOG_VERBOSE);
     esp_log_level_set("outbox", ESP_LOG_VERBOSE);
+
+/* 由于esp32c3不带REF_TICK，且该开发板没有外部低速时钟源，所以XTAL也无法使用。自动light-sleep模式暂时无法满足条件 */
+// #if CONFIG_PM_ENABLE
+//     // Configure dynamic frequency scaling:
+//     // maximum and minimum frequencies are set in sdkconfig,
+//     // automatic light sleep is enabled if tickless idle support is enabled.
+//     esp_pm_config_t pm_config = {
+//         .max_freq_mhz = 80,
+//         .min_freq_mhz = 10,
+// #if CONFIG_FREERTOS_USE_TICKLESS_IDLE
+//         .light_sleep_enable = true
+// #endif
+//     };
+//     ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+// #endif // CONFIG PM ENABLE
 
     // 初始化NVS存储区
     ESP_ERROR_CHECK(nvs_flash_init());

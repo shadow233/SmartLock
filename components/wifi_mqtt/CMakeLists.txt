@@ -7,6 +7,7 @@ idf_component_register(SRCS "wifi_mqtt.c"
                     "${IDF_PATH}/components/esp_partition/include"
                     "${IDF_PATH}/components/esp_netif/include"
                     "${IDF_PATH}/components/esp_event/include"
+                    "${IDF_PATH}/components/esp_pm/include"
                     "${IDF_PATH}/components/mqtt/esp-mqtt/include"
                     "${IDF_PATH}/components/tcp_transport/include"
                     )
